@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -10,5 +10,10 @@ export default defineConfig({
       // 开发期代理到 FastAPI(生产由 FastAPI 静态托管,无需代理)
       '/api': 'http://localhost:8000',
     },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: './tests/setup.ts',
+    css: false,
   },
 })
