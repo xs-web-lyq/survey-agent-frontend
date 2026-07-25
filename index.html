@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Research Copilot</title>
+    <!-- Load the Figma bridge only for an explicit html-to-design capture URL. -->
+    <script>
+      if (location.hash.includes('figmacapture=')) {
+        var figmaBridge = document.createElement('script')
+        figmaBridge.src = 'https://mcp.figma.com/mcp/html-to-design/capture.js'
+        figmaBridge.async = true
+        document.head.appendChild(figmaBridge)
+      }
+    </script>
+    <script>
+      // 首帧前应用主题,避免刷新闪烁
+      (function () {
+        var t = localStorage.getItem('theme')
+        if (!t) {
+          t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+        }
+        if (t === 'light') document.documentElement.classList.add('light')
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
