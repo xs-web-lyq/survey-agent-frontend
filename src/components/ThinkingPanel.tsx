@@ -152,11 +152,13 @@ function StepIcon({ step }: { step: ActivityStep }) {
 export function ThinkingPanel({
   trace,
   active = false,
+  failed = false,
   latencyMs,
   title = '思考过程',
 }: {
   trace: TraceItem[]
   active?: boolean
+  failed?: boolean
   latencyMs?: number
   title?: string
 }) {
@@ -167,6 +169,11 @@ export function ThinkingPanel({
   const wasActive = useRef(active)
 
   useEffect(() => {
+    if (failed) {
+      setOpen(true)
+      wasActive.current = false
+      return
+    }
     if (active) {
       if (!wasActive.current) startedAt.current = Date.now()
       setOpen(true)
@@ -178,7 +185,7 @@ export function ThinkingPanel({
     }
     if (wasActive.current) setOpen(false)
     wasActive.current = false
-  }, [active])
+  }, [active, failed])
 
   if (!steps.length && !active) return null
 
@@ -187,7 +194,7 @@ export function ThinkingPanel({
   const durationLabel = duration > 0 ? `${(duration / 1000).toFixed(1)}s` : ''
 
   return (
-    <section className={`thinking-panel ${active ? 'is-active' : ''}`} aria-label={title}>
+    <section className={`thinking-panel ${active ? 'is-active' : ''} ${failed ? 'is-failed' : ''}`} aria-label={title}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -195,14 +202,22 @@ export function ThinkingPanel({
         aria-expanded={open}
       >
         <span className="thinking-panel-gem">
-          {active ? <LoaderCircle size={15} className="animate-spin" /> : <Sparkles size={15} />}
+          {active
+            ? <LoaderCircle size={15} className="animate-spin" />
+            : failed
+              ? <CircleAlert size={15} />
+              : <Sparkles size={15} />}
         </span>
         <span className="min-w-0 flex-1 text-left">
           <span className="block text-xs font-semibold text-ink-1">
-            {active ? (current?.text ?? '正在思考') : `${title}已完成`}
+            {active ? (current?.text ?? '正在思考') : failed ? `${title}中断` : `${title}已完成`}
           </span>
           <span className="block truncate text-[0.67rem] text-ink-3">
-            {active ? '实时展示分析摘要与工具活动' : `${steps.length} 个步骤 · 点击查看依据`}
+            {active
+              ? '实时展示分析摘要与工具活动'
+              : failed
+                ? `${steps.length} 个步骤已保存 · 可检查后重试`
+                : `${steps.length} 个步骤 · 点击查看依据`}
           </span>
         </span>
         {durationLabel && (

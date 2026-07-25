@@ -5,7 +5,7 @@
  */
 
 export interface SSEHandlers {
-  onMeta?: (d: { conv_id: string }) => void
+  onMeta?: (d: { conv_id: string; run_id?: string; message_id?: string }) => void
   onRouteInfo?: (d: { requested: string; used: string; decision?: unknown }) => void
   onToolCall?: (d: Record<string, unknown>) => void
   onToolResult?: (d: Record<string, unknown>) => void
@@ -23,8 +23,15 @@ export interface SSEHandlers {
     detail?: string
     duration_ms?: number
   }) => void
-  onStatus?: (d: { status: string; latency_ms?: number; error?: string }) => void
-  onSaved?: (d: { message_id: string }) => void
+  onStatus?: (d: {
+    status: string
+    stage?: string
+    run_id?: string
+    latency_ms?: number
+    error?: string
+    error_code?: string
+  }) => void
+  onSaved?: (d: { message_id: string; run_id?: string; status?: string }) => void
   onError?: (err: Error) => void
 }
 
@@ -34,6 +41,14 @@ export async function streamChat(
   signal?: AbortSignal,
 ): Promise<void> {
   return streamSSE('/api/chat', body, handlers, signal)
+}
+
+export async function retryChat(
+  runId: string,
+  handlers: SSEHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamSSE(`/api/runs/${runId}/retry`, {}, handlers, signal)
 }
 
 /** 通用 SSE POST:brainstorm 等复用同一事件协议 */
@@ -68,7 +83,7 @@ export async function streamSSE(
     const data = (payload.data ?? payload) as Record<string, unknown>
     switch (event) {
       case 'meta':
-        handlers.onMeta?.(data as { conv_id: string })
+        handlers.onMeta?.(data as { conv_id: string; run_id?: string; message_id?: string })
         break
       case 'route_info':
         handlers.onRouteInfo?.(data as { requested: string; used: string })
@@ -113,7 +128,7 @@ export async function streamSSE(
         handlers.onStatus?.(data as { status: string })
         break
       case 'saved':
-        handlers.onSaved?.(data as { message_id: string })
+        handlers.onSaved?.(data as { message_id: string; run_id?: string; status?: string })
         break
     }
   }

@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import { Route, Telescope, Timer } from 'lucide-react'
+import { CircleAlert, RotateCcw, Route, Telescope, Timer } from 'lucide-react'
 import type { ChatMessageData, Citation } from '../lib/types'
 import { FeedbackBar } from './FeedbackBar'
 import { ThinkingPanel } from './ThinkingPanel'
@@ -63,7 +63,15 @@ function CitationPopover({ c }: { c: Citation }) {
   )
 }
 
-export function ChatMessage({ msg }: { msg: ChatMessageData }) {
+export function ChatMessage({
+  msg,
+  onRetry,
+  retrying = false,
+}: {
+  msg: ChatMessageData
+  onRetry?: (runId: string) => void
+  retrying?: boolean
+}) {
   const isUser = msg.role === 'user'
   const processed = useMemo(
     () => (isUser ? msg.content : renderWithCitations(msg.content, msg.citations)),
@@ -112,8 +120,33 @@ export function ChatMessage({ msg }: { msg: ChatMessageData }) {
       <ThinkingPanel
         trace={msg.trace}
         active={Boolean(msg.streaming)}
+        failed={msg.status === 'failed'}
         latencyMs={msg.latency_ms}
       />
+
+      {msg.status === 'failed' && (
+        <div className="mb-3 flex max-w-2xl items-start gap-3 rounded-xl border border-red/25 bg-red/5 px-3.5 py-3 text-sm text-ink-2">
+          <CircleAlert size={16} className="mt-0.5 shrink-0 text-red" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-ink-1">本轮问答未完成</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-3">
+              {msg.error?.message ?? '执行状态和已完成的检索轨迹已经保存，可以直接重试。'}
+              {msg.error?.stage ? `（失败阶段：${msg.error.stage}）` : ''}
+            </p>
+          </div>
+          {msg.run_id && onRetry && (
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={() => onRetry(msg.run_id!)}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line bg-surface-1 px-2.5 py-1.5 text-xs font-medium text-ink-2 transition hover:border-accent/40 hover:text-accent disabled:opacity-50"
+            >
+              <RotateCcw size={12} className={retrying ? 'animate-spin' : ''} />
+              重试
+            </button>
+          )}
+        </div>
+      )}
 
       <div className={`md-body max-w-full ${msg.streaming ? 'typing-cursor' : ''}`}>
         <ReactMarkdown
@@ -163,7 +196,9 @@ export function ChatMessage({ msg }: { msg: ChatMessageData }) {
       )}
 
       {/* 打分条(仅已落库的回答) */}
-      {!msg.streaming && msg.id && <FeedbackBar messageId={msg.id} existing={msg.feedback} />}
+      {!msg.streaming && msg.status !== 'failed' && msg.id && (
+        <FeedbackBar messageId={msg.id} existing={msg.feedback} />
+      )}
     </div>
   )
 }

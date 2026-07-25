@@ -43,6 +43,9 @@ export interface ChatMessageData {
   model?: string
   latency_ms?: number
   feedback?: FeedbackData | null
+  status?: 'running' | 'completed' | 'failed'
+  error?: { code?: string; message?: string; stage?: string } | null
+  run_id?: string
   /** 流式中(尚未落库) */
   streaming?: boolean
 }

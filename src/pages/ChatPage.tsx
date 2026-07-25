@@ -1,10 +1,11 @@
 /** 问答主页:GPT 式对话流(左侧会话列表 + 中央对话) */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Brain, GitFork, Loader2, SendHorizonal, Sparkles, Telescope } from 'lucide-react'
 import { api } from '../lib/api'
-import { streamChat } from '../lib/sse'
+import { retryChat, streamChat } from '../lib/sse'
+import type { SSEHandlers } from '../lib/sse'
 import type { ChatMessageData, Citation, ConversationSummary, TraceItem } from '../lib/types'
 import { ChatMessage } from '../components/ChatMessage'
 import { RouteSelector } from '../components/RouteSelector'
@@ -25,6 +26,7 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessageData[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [retryingRunId, setRetryingRunId] = useState<string | null>(null)
   const [statusLine, setStatusLine] = useState('')
   const [memoryOpen, setMemoryOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -91,6 +93,9 @@ export function ChatPage() {
         citations: (m.citations as Citation[]) ?? [],
         trace: (m.trace as TraceItem[]) ?? [],
         latency_ms: Number(m.latency_ms ?? 0),
+        status: (m.status as ChatMessageData['status']) ?? 'completed',
+        error: (m.error as ChatMessageData['error']) ?? null,
+        run_id: String(m.run_id ?? ''),
         feedback: m.feedback as ChatMessageData['feedback'],
       }))
       setMessages(msgs)
@@ -101,7 +106,142 @@ export function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, statusLine])
 
-  const send = useCallback(async () => {
+  const runAssistantStream = async (
+    asstMsg: ChatMessageData,
+    execute: (handlers: SSEHandlers, signal: AbortSignal) => Promise<void>,
+  ) => {
+    let currentMessageId = asstMsg.id
+    let streamedConvId: string | null = convId ?? null
+    const patchAsst = (
+      patch: Partial<ChatMessageData> | ((m: ChatMessageData) => Partial<ChatMessageData>),
+    ) => {
+      const targetId = currentMessageId
+      setMessages((prev) => prev.map((m) => (
+        m.id === targetId ? { ...m, ...(typeof patch === 'function' ? patch(m) : patch) } : m
+      )))
+    }
+
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+    try {
+      await execute({
+        onMeta: (d) => {
+          streamedConvId = d.conv_id
+          const nextId = d.message_id || currentMessageId
+          patchAsst({
+            id: nextId,
+            run_id: d.run_id,
+            status: 'running',
+            streaming: true,
+          })
+          currentMessageId = nextId
+        },
+        onRouteInfo: (d) => {
+          patchAsst((m) => ({
+            route_used: d.used,
+            trace: [...m.trace, { type: 'route_info', data: d as unknown as Record<string, unknown>, ts: Date.now() / 1000 }],
+          }))
+          setStatusLine(`链路 ${d.used} 检索中…`)
+        },
+        onMemoryLoaded: (d) => {
+          patchAsst((m) => ({
+            trace: [...m.trace, { type: 'memory_loaded', data: d, ts: Date.now() / 1000 }],
+          }))
+          const count = Number(d.recent_messages ?? 0)
+          if (count > 0) setStatusLine(`已恢复 ${count} 条上下文，正在理解追问…`)
+        },
+        onQueryRewritten: (d) => {
+          patchAsst((m) => ({
+            trace: [...m.trace, { type: 'query_rewritten', data: d, ts: Date.now() / 1000 }],
+          }))
+          setStatusLine('已结合对话上下文改写检索问题…')
+        },
+        onMemoryUpdated: (d) => patchAsst((m) => ({
+          trace: [...m.trace, { type: 'memory_updated', data: d, ts: Date.now() / 1000 }],
+        })),
+        onMemoryCompacted: (d) => patchAsst((m) => ({
+          trace: [...m.trace, { type: 'memory_compacted', data: d, ts: Date.now() / 1000 }],
+        })),
+        onToolCall: (d) => patchAsst((m) => ({
+          trace: [...m.trace, { type: 'tool_call', data: d, ts: Date.now() / 1000 }],
+        })),
+        onToolResult: (d) => {
+          patchAsst((m) => ({
+            trace: [...m.trace, { type: 'tool_result', data: d, ts: Date.now() / 1000 }],
+          }))
+          setStatusLine('正在生成回答…')
+        },
+        onDeepRound: (d) => {
+          patchAsst((m) => ({
+            trace: [...m.trace, { type: 'deep_round', data: d, ts: Date.now() / 1000 }],
+          }))
+          if (d.verdict === 'insufficient') {
+            setStatusLine(`第 ${d.round} 轮补充搜证:${String(d.query ?? '').slice(0, 30)}…`)
+          } else if (d.verdict === 'sufficient') {
+            setStatusLine('证据充分,正在生成回答…')
+          }
+        },
+        onThinking: (d) => {
+          patchAsst((m) => ({
+            trace: [...m.trace, {
+              type: 'thinking',
+              data: d as unknown as Record<string, unknown>,
+              ts: Date.now() / 1000,
+            }],
+          }))
+          setStatusLine(d.text)
+        },
+        onTextDelta: (delta) => {
+          setStatusLine('')
+          patchAsst((m) => ({ content: m.content + delta }))
+        },
+        onCitations: (items) => patchAsst({ citations: items as Citation[] }),
+        onStatus: (d) => {
+          if (d.status === 'failed') {
+            patchAsst({
+              streaming: false,
+              status: 'failed',
+              run_id: d.run_id,
+              error: {
+                code: d.error_code,
+                message: d.error ?? '本轮问答执行失败，请稍后重试。',
+                stage: d.stage,
+              },
+            })
+          } else if (d.status === 'done') {
+            patchAsst({ status: 'completed' })
+          }
+          if (d.latency_ms) patchAsst({ latency_ms: d.latency_ms })
+        },
+        onSaved: (d) => {
+          const nextId = d.message_id || currentMessageId
+          patchAsst({
+            id: nextId,
+            run_id: d.run_id,
+            status: d.status === 'failed' ? 'failed' : 'completed',
+            streaming: false,
+          })
+          currentMessageId = nextId
+        },
+      }, ctrl.signal)
+    } catch (err) {
+      patchAsst({
+        streaming: false,
+        status: 'failed',
+        error: {
+          code: 'StreamError',
+          message: `连接中断：${err instanceof Error ? err.message : String(err)}`,
+          stage: 'stream',
+        },
+      })
+    } finally {
+      patchAsst({ streaming: false })
+      abortRef.current = null
+    }
+    return streamedConvId
+  }
+
+  const send = async () => {
     const question = input.trim()
     if (!question || busy) return
     setInput('')
@@ -123,121 +263,52 @@ export function ChatPage() {
       citations: [],
       trace: [],
       streaming: true,
+      status: 'running',
     }
     setMessages((prev) => [...prev, userMsg, asstMsg])
 
-    const patchAsst = (patch: Partial<ChatMessageData> | ((m: ChatMessageData) => Partial<ChatMessageData>)) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === asstMsg.id ? { ...m, ...(typeof patch === 'function' ? patch(m) : patch) } : m,
+    try {
+      const newConvId = await runAssistantStream(
+        asstMsg,
+        (handlers, signal) => streamChat(
+          { question, route, conv_id: convId ?? null, deep }, handlers, signal,
         ),
       )
-    }
-
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-    let newConvId: string | null = convId ?? null
-
-    try {
-      await streamChat(
-        { question, route, conv_id: convId ?? null, deep },
-        {
-          onMeta: (d) => {
-            newConvId = d.conv_id
-          },
-          onRouteInfo: (d) => {
-            patchAsst((m) => ({
-              route_used: d.used,
-              trace: [...m.trace, { type: 'route_info', data: d as unknown as Record<string, unknown>, ts: Date.now() }],
-            }))
-            setStatusLine(`链路 ${d.used} 检索中…`)
-          },
-          onMemoryLoaded: (d) => {
-            patchAsst((m) => ({
-              trace: [...m.trace, { type: 'memory_loaded', data: d, ts: Date.now() }],
-            }))
-            const count = Number(d.recent_messages ?? 0)
-            if (count > 0) setStatusLine(`已恢复 ${count} 条上下文，正在理解追问…`)
-          },
-          onQueryRewritten: (d) => {
-            patchAsst((m) => ({
-              trace: [...m.trace, { type: 'query_rewritten', data: d, ts: Date.now() }],
-            }))
-            setStatusLine('已结合对话上下文改写检索问题…')
-          },
-          onMemoryUpdated: (d) => {
-            patchAsst((m) => ({
-              trace: [...m.trace, { type: 'memory_updated', data: d, ts: Date.now() }],
-            }))
-          },
-          onMemoryCompacted: (d) => {
-            patchAsst((m) => ({
-              trace: [...m.trace, { type: 'memory_compacted', data: d, ts: Date.now() }],
-            }))
-          },
-          onToolCall: (d) =>
-            patchAsst((m) => ({
-              trace: [...m.trace, { type: 'tool_call', data: d, ts: Date.now() }],
-            })),
-          onToolResult: (d) => {
-            patchAsst((m) => ({
-              trace: [...m.trace, { type: 'tool_result', data: d, ts: Date.now() }],
-            }))
-            setStatusLine('正在生成回答…')
-          },
-          onDeepRound: (d) => {
-            patchAsst((m) => ({
-              trace: [...m.trace, { type: 'deep_round', data: d, ts: Date.now() }],
-            }))
-            if (d.verdict === 'insufficient') {
-              setStatusLine(`第 ${d.round} 轮补充搜证:${String(d.query ?? '').slice(0, 30)}…`)
-            } else if (d.verdict === 'sufficient') {
-              setStatusLine('证据充分,正在生成回答…')
-            }
-          },
-          onThinking: (d) => {
-            patchAsst((m) => ({
-              trace: [...m.trace, {
-                type: 'thinking',
-                data: d as unknown as Record<string, unknown>,
-                ts: Date.now(),
-              }],
-            }))
-            setStatusLine(d.text)
-          },
-          onTextDelta: (delta) => {
-            setStatusLine('')
-            patchAsst((m) => ({ content: m.content + delta }))
-          },
-          onCitations: (items) => patchAsst({ citations: items as Citation[] }),
-          onStatus: (d) => {
-            if (d.status === 'failed') {
-              patchAsst((m) => ({
-                streaming: false,
-                content: m.content || `❌ 出错了:${d.error ?? '未知错误'}`,
-              }))
-            }
-            if (d.latency_ms) patchAsst({ latency_ms: d.latency_ms })
-          },
-          onSaved: (d) => {
-            patchAsst({ id: d.message_id, streaming: false })
-          },
-        },
-        ctrl.signal,
-      )
-    } catch (err) {
-      patchAsst((m) => ({
-        streaming: false,
-        content: m.content || `❌ 请求失败:${err instanceof Error ? err.message : String(err)}`,
-      }))
+      if (!convId && newConvId) navigate(`/chat/${newConvId}`, { replace: true })
     } finally {
       setBusy(false)
       setStatusLine('')
-      patchAsst({ streaming: false })
       void refreshConvs()
-      if (!convId && newConvId) navigate(`/chat/${newConvId}`, { replace: true })
     }
-  }, [input, busy, route, deep, convId, navigate])
+  }
+
+  const retryRun = async (runId: string) => {
+    if (busy) return
+    setBusy(true)
+    setRetryingRunId(runId)
+    setStatusLine('正在重新执行本轮问答…')
+    const asstMsg: ChatMessageData = {
+      id: `tmp-retry-${++tempIdCounter}`,
+      role: 'assistant',
+      content: '',
+      citations: [],
+      trace: [],
+      streaming: true,
+      status: 'running',
+    }
+    setMessages((prev) => [...prev, asstMsg])
+    try {
+      await runAssistantStream(
+        asstMsg,
+        (handlers, signal) => retryChat(runId, handlers, signal),
+      )
+    } finally {
+      setBusy(false)
+      setRetryingRunId(null)
+      setStatusLine('')
+      void refreshConvs()
+    }
+  }
 
   return (
     <div className="chat-shell flex h-full">
@@ -302,7 +373,12 @@ export function ChatPage() {
             )}
             <div className="space-y-6">
               {messages.map((m) => (
-                <ChatMessage key={m.id} msg={m} />
+                <ChatMessage
+                  key={m.id}
+                  msg={m}
+                  onRetry={(runId) => void retryRun(runId)}
+                  retrying={retryingRunId === m.run_id}
+                />
               ))}
             </div>
             {statusLine && (
