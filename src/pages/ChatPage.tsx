@@ -12,6 +12,7 @@ import { RouteSelector } from '../components/RouteSelector'
 import { DragHandle, useDragWidth } from '../lib/useDragWidth'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ConversationSidebar } from '../components/ConversationSidebar'
+import { RecycleBinPanel } from '../components/RecycleBinPanel'
 
 let tempIdCounter = 0
 
@@ -29,6 +30,8 @@ export function ChatPage() {
   const [retryingRunId, setRetryingRunId] = useState<string | null>(null)
   const [statusLine, setStatusLine] = useState('')
   const [memoryOpen, setMemoryOpen] = useState(false)
+  const [trashOpen, setTrashOpen] = useState(false)
+  const [lastDeleted, setLastDeleted] = useState<ConversationSummary | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   // 会话工作区宽度可拖拽，导航轨由 App 统一负责。
@@ -63,9 +66,19 @@ export function ChatPage() {
   }
 
   const deleteConversation = async (id: string) => {
+    const deleted = convs.find((item) => item.id === id) ?? null
     await api.deleteConversation(id)
     setConvs((prev) => prev.filter((item) => item.id !== id))
+    setLastDeleted(deleted)
     if (convId === id) navigate('/chat')
+  }
+
+  const undoDelete = async () => {
+    if (!lastDeleted) return
+    const restored = lastDeleted
+    await api.restoreConversation(restored.id)
+    setLastDeleted(null)
+    await refreshConvs()
   }
 
   const exportConversation = async (id: string) => {
@@ -322,6 +335,7 @@ export function ChatPage() {
         onRename={renameConversation}
         onDelete={deleteConversation}
         onExport={exportConversation}
+        onOpenTrash={() => setTrashOpen(true)}
       />
       <DragHandle {...handleProps} />
 
@@ -446,6 +460,22 @@ export function ChatPage() {
         </div>
       </div>
       <MemoryPanel open={memoryOpen} convId={convId} onClose={() => setMemoryOpen(false)} />
+      <RecycleBinPanel
+        open={trashOpen}
+        onClose={() => setTrashOpen(false)}
+        onChanged={() => void refreshConvs()}
+      />
+      {lastDeleted && (
+        <div className="fixed bottom-5 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-surface-2 px-4 py-3 text-xs text-ink-2 shadow-xl">
+          <span>“{lastDeleted.title || '未命名对话'}”已移入回收站</span>
+          <button type="button" onClick={() => void undoDelete()} className="font-semibold text-accent hover:underline">
+            撤销
+          </button>
+          <button type="button" onClick={() => setLastDeleted(null)} className="text-ink-3 hover:text-ink-1" aria-label="关闭提示">
+            ×
+          </button>
+        </div>
+      )}
     </div>
   )
 }

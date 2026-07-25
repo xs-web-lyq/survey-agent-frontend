@@ -11,6 +11,8 @@ async function getJSON<T>(url: string): Promise<T> {
 export const api = {
   meta: () => getJSON<Meta>('/api/meta'),
   conversations: () => getJSON<ConversationSummary[]>('/api/conversations'),
+  deletedConversations: () =>
+    getJSON<ConversationSummary[]>('/api/trash/conversations'),
   conversation: (id: string) =>
     getJSON<Record<string, unknown>>(`/api/conversations/${id}`),
   renameConversation: async (id: string, title: string) => {
@@ -25,7 +27,22 @@ export const api = {
   deleteConversation: async (id: string) => {
     const r = await fetch(`/api/conversations/${id}`, { method: 'DELETE' })
     if (!r.ok) throw new Error(`delete conversation: ${r.status}`)
-    return r.json() as Promise<{ id: string; deleted: boolean }>
+    return r.json() as Promise<{ id: string; deleted: boolean; moved_to_trash: boolean }>
+  },
+  restoreConversation: async (id: string) => {
+    const r = await fetch(`/api/trash/conversations/${id}/restore`, { method: 'POST' })
+    if (!r.ok) throw new Error(`restore conversation: ${r.status}`)
+    return r.json() as Promise<{ id: string; restored: boolean }>
+  },
+  purgeConversation: async (id: string, deleteDurableMemories = false) => {
+    const query = deleteDurableMemories ? '?delete_durable_memories=true' : ''
+    const r = await fetch(`/api/trash/conversations/${id}${query}`, { method: 'DELETE' })
+    if (!r.ok) throw new Error(`purge conversation: ${r.status}`)
+    return r.json() as Promise<{
+      id: string
+      purged: boolean
+      durable_memories_deleted: boolean
+    }>
   },
   exportConversation: async (id: string) => {
     const r = await fetch(`/api/conversations/${id}/export.md`)

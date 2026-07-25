@@ -57,6 +57,7 @@ export interface ConversationSummary {
   created_at: number
   message_count: number
   last_message_at: number | null
+  deleted_at?: number | null
 }
 
 export interface Meta {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, CirclePlus, Database, Download, MessageSquareText, MoreHorizontal, Pencil, Search, Sparkles, Trash2, X } from 'lucide-react'
+import { ArchiveRestore, Check, CirclePlus, Database, Download, MessageSquareText, MoreHorizontal, Pencil, Search, Sparkles, Trash2, X } from 'lucide-react'
 import type { ConversationSummary } from '../lib/types'
 
 interface ConversationSidebarProps {
@@ -12,6 +12,7 @@ interface ConversationSidebarProps {
   onRename: (id: string, title: string) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onExport: (id: string) => Promise<void>
+  onOpenTrash: () => void
 }
 
 function displayTitle(title: string) {
@@ -39,6 +40,7 @@ export function ConversationSidebar({
   onRename,
   onDelete,
   onExport,
+  onOpenTrash,
 }: ConversationSidebarProps) {
   const [query, setQuery] = useState('')
   const [menuId, setMenuId] = useState<string | null>(null)
@@ -177,7 +179,7 @@ export function ConversationSidebar({
                           </button>
                           <button type="button" role="menuitem" className="is-danger" onClick={() => {
                             setMenuId(null)
-                            if (window.confirm(`确定删除“${displayTitle(item.title)}”吗？\n删除后无法恢复。`)) void onDelete(item.id)
+                            if (window.confirm(`将“${displayTitle(item.title)}”移入回收站？\n之后可以恢复。`)) void onDelete(item.id)
                           }}>
                             <Trash2 size={13} /> 删除会话
                           </button>
@@ -234,6 +236,14 @@ export function ConversationSidebar({
           </div>
         )}
       </nav>
+
+      <button
+        type="button"
+        onClick={onOpenTrash}
+        className="mx-3 mb-2 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-ink-3 transition hover:bg-surface-2 hover:text-ink-1"
+      >
+        <ArchiveRestore size={13} /> 会话回收站
+      </button>
 
       {kbName && (
         <div className="sidebar-kb-footer" title={kbName}>
