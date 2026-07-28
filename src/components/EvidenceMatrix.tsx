@@ -19,6 +19,13 @@ const STATUS_LABELS: Record<string, string> = {
   written: '章节已写入',
 }
 
+const STOP_REASON_LABELS: Record<string, string> = {
+  coverage_satisfied: '覆盖达标：研究问题与独立来源门槛均已满足',
+  plateau: '平台停止：连续两轮未发现新的有效证据',
+  budget_exhausted: '预算停止：已用完本节自动检索轮次',
+  manual_supplement_exhausted: '定向补证结束：仍有证据缺口，已保留研究空白',
+}
+
 function sourceName(source: string): string {
   return source.split(/[\\/]/).pop() || source
 }
@@ -101,6 +108,18 @@ function SectionCard({
                     </span>
                     <span className="text-xs leading-relaxed text-ink-2">{question.question}</span>
                   </div>
+                  {!question.covered && (
+                    <p className="mt-1 pl-8 text-[0.62rem] text-amber">
+                      尚缺
+                      {question.missing_chunks
+                        ? ` ${question.missing_chunks} 个证据块`
+                        : ''}
+                      {question.missing_chunks && question.missing_sources ? '、' : ''}
+                      {question.missing_sources
+                        ? ` ${question.missing_sources} 个独立来源`
+                        : ''}
+                    </p>
+                  )}
                   {question.evidence.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1 pl-8">
                       {[...new Set(question.evidence.map((item) => item.source))]
@@ -118,7 +137,11 @@ function SectionCard({
                   )}
                 </div>
                 <div className="text-right">
-                  <span className="block text-xs font-medium text-ink-1">{question.chunks}</span>
+                  <span className={`block text-xs font-medium ${
+                    question.chunks >= 2 ? 'text-green' : 'text-red'
+                  }`}>
+                    {question.chunks}/2
+                  </span>
                   <span className="text-[0.62rem] text-ink-3">证据块</span>
                 </div>
                 <div className="text-right">
@@ -152,6 +175,16 @@ function SectionCard({
               </div>
             ))}
           </div>
+          {section.stop_reason && (
+            <p className={`mt-2 flex items-start gap-1.5 text-[0.67rem] leading-relaxed ${
+              section.stop_reason === 'coverage_satisfied' ? 'text-green' : 'text-amber'
+            }`}>
+              {section.stop_reason === 'coverage_satisfied'
+                ? <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
+                : <CircleDashed size={12} className="mt-0.5 shrink-0" />}
+              {STOP_REASON_LABELS[section.stop_reason] ?? `检索停止：${section.stop_reason}`}
+            </p>
+          )}
           {section.coverage.gap && (
             <p className="mt-2 flex items-start gap-1.5 text-[0.67rem] leading-relaxed text-amber">
               <ShieldAlert size={12} className="mt-0.5 shrink-0" />

@@ -108,9 +108,25 @@ export interface EvidenceQuestion {
   id: string
   question: string
   covered: boolean
+  status?: 'covered' | 'missing_sources' | 'missing_evidence' | string
   chunks: number
   sources: number
+  missing_chunks?: number
+  missing_sources?: number
   evidence: EvidenceMatrixItem[]
+}
+
+export interface EvidenceRound {
+  round: number
+  question_id: string
+  question?: string
+  query?: string
+  strategy?: string
+  new_question_chunks?: number
+  new_unique_chunks?: number
+  coverage_ratio?: number
+  covered_questions?: number
+  source_count?: number
 }
 
 export interface EvidenceSection {
@@ -119,12 +135,16 @@ export interface EvidenceSection {
   status: 'pending' | 'retrieving' | 'ready' | 'partial' | 'written' | string
   round: number
   max_rounds: number
+  stop_reason?: 'coverage_satisfied' | 'plateau' | 'budget_exhausted'
+    | 'manual_supplement_exhausted' | string
+  round_history?: EvidenceRound[]
   coverage: {
     sufficient: boolean
     covered_questions: number
     total_questions: number
     source_count: number
     required_sources: number
+    source_diversity_met?: boolean
     gap?: string
   }
   questions: EvidenceQuestion[]
