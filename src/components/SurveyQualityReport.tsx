@@ -88,13 +88,13 @@ export function SurveyQualityReport({
           ? 'border-green/30 bg-green/5'
           : 'border-amber/30 bg-amber/5'
       }`}>
-        <div className="flex items-start gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             ready ? 'bg-green/10 text-green' : 'bg-amber/10 text-amber'
           }`}>
             {ready ? <ShieldCheck size={20} /> : <AlertTriangle size={20} />}
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-36 flex-1">
             <h2 className="text-sm font-semibold text-ink-1">终稿质量门禁</h2>
             <p className="mt-0.5 text-xs text-ink-2">
               {STATUS_LABELS[report.overall_status] ?? report.overall_status}
@@ -102,16 +102,16 @@ export function SurveyQualityReport({
             <p className="mt-1 text-[0.66rem] text-ink-3">
               这是基于证据、引用和文献字段的确定性检查，不是大模型自评。
             </p>
+            <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[0.66rem] font-semibold ${
+              ready ? 'bg-green/10 text-green' : 'bg-amber/10 text-amber'
+            }`}>
+              {summary.gates_action_required
+                ? `${summary.gates_action_required} 项待处理`
+                : '全部通过'}
+            </span>
           </div>
-          <span className={`rounded-full px-2.5 py-1 text-[0.66rem] font-semibold ${
-            ready ? 'bg-green/10 text-green' : 'bg-amber/10 text-amber'
-          }`}>
-            {summary.gates_action_required
-              ? `${summary.gates_action_required} 项待处理`
-              : '全部通过'}
-          </span>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
           <div className="rounded-lg bg-surface-1/80 px-3 py-2">
             <span className="block text-sm font-semibold text-ink-1">
               {summary.research_questions_covered}/{summary.research_questions_total}

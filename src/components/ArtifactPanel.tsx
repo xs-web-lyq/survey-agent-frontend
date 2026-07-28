@@ -118,7 +118,7 @@ export function ArtifactPanel({
   }, [streamingTarget, run.status, files.length])
 
   // 内容:优先流式缓冲,否则拉文件
-  const streamContent = selected ? run.streams[selected] : ''
+  const streamContent = selected ? (run.streams[selected] ?? '') : ''
   useEffect(() => {
     const persisted = run.files.includes(selected)
     if (
