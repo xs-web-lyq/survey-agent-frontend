@@ -165,6 +165,57 @@ export interface EvidenceMatrixData {
   sections: EvidenceSection[]
 }
 
+export interface SurveyQualityGate {
+  id: string
+  label: string
+  status: 'pass' | 'warning' | 'action_required' | 'not_applicable' | string
+  detail: string
+}
+
+export interface SurveyQualityReport {
+  schema_version: number
+  task_id: string
+  generated_at: number
+  overall_status: 'ready' | 'ready_with_warnings' | 'review_required' | string
+  summary: {
+    gates_passed: number
+    gates_action_required: number
+    brief_questions_total: number
+    brief_questions_covered: number
+    research_questions_total: number
+    research_questions_covered: number
+    citations_total: number
+    citations_passed: number
+    citations_failed: number
+    references_total: number
+    references_complete: number
+  }
+  gates: SurveyQualityGate[]
+  brief_questions: {
+    question: string
+    assigned_sections: string[]
+    covered: boolean
+    chunks: number
+    sources: number
+  }[]
+  sections: {
+    section_id: string
+    title: string
+    sufficient: boolean
+    gap: string
+    stop_reason: string
+  }[]
+  citation_review: { failed_chunk_ids: string[] }
+  bibliography_review: {
+    incomplete_references: {
+      source: string
+      title: string
+      missing_fields: string[]
+    }[]
+  }
+  recommendations: string[]
+}
+
 export const ROUTE_LABELS: Record<string, { label: string; desc: string }> = {
   mix: { label: '图谱增强', desc: '实体+关系+向量的知识图谱检索,证据最全(较慢)' },
   progressive: { label: '章节渐进', desc: '文档结构感知的章节级检索,引用带页码' },

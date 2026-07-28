@@ -11,11 +11,13 @@ import type { SurveyRunState } from '../lib/useSurveyEvents'
 import { DragHandle, useDragWidth } from '../lib/useDragWidth'
 import { EvidenceMatrix } from './EvidenceMatrix'
 import { OutlineEditor } from './OutlineEditor'
+import { SurveyQualityReport } from './SurveyQualityReport'
 
 const FILE_ORDER = [
   'outline.md',
   'evidence_matrix.json',
   'survey.md',
+  'quality_report.json',
   'references.md',
   'bibliography.json',
   'notes.md',
@@ -62,6 +64,7 @@ function fileLabel(p: string): string {
   if (p === 'outline.md') return '📋 大纲'
   if (p === 'evidence_matrix.json') return '🧭 证据矩阵'
   if (p === 'survey.md') return '📄 综述全文'
+  if (p === 'quality_report.json') return '🛡️ 质量报告'
   if (p === 'references.md') return '📚 参考文献'
   if (p === 'bibliography.json') return '🧾 文献元数据'
   if (p === 'notes.md') return '📝 要点笔记'
@@ -121,6 +124,7 @@ export function ArtifactPanel({
     if (
       !selected
       || selected === 'evidence_matrix.json'
+      || selected === 'quality_report.json'
       || !persisted
       || (streamContent && run.status === 'running')
     ) return
@@ -205,6 +209,11 @@ export function ArtifactPanel({
             taskId={taskId}
             revision={run.coverageRevision}
             runStatus={run.status}
+          />
+        ) : selected === 'quality_report.json' ? (
+          <SurveyQualityReport
+            taskId={taskId}
+            revision={run.files.length}
           />
         ) : (
           <>
