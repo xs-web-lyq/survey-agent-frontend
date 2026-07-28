@@ -6,8 +6,8 @@ import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
-  ArrowLeft, ArrowRight, BookMarked, BookOpenText, Gauge, Lightbulb,
-  Loader2, PencilLine, SendHorizonal, Sparkles,
+  ArrowLeft, ArrowRight, BookMarked, BookOpenText, Check, Gauge, Lightbulb,
+  Loader2, PencilLine, Save, SendHorizonal, Sparkles, X,
 } from 'lucide-react'
 import { streamSSE } from '../lib/sse'
 import type { TraceItem } from '../lib/types'
@@ -32,6 +32,11 @@ interface BsMessage {
 }
 
 export interface BrainstormConclusion {
+  brief_id: string
+  conv_id: string
+  version: number
+  status: 'draft' | 'confirmed' | 'handed_off'
+  task_id: string
   topic: string
   section_hints: string[]
   doc_keywords: string[]
@@ -47,30 +52,60 @@ export interface BrainstormConclusion {
   doc_scope: string[]
 }
 
-function handoffContext(brief: BrainstormConclusion) {
-  return [
-    `选题讨论结论：${brief.summary}`,
-    `核心研究问题：${brief.research_questions.join('；')}`,
-    `章节线索：${brief.section_hints.join('；')}`,
-    `纳入边界：${brief.inclusion_criteria.join('；')}`,
-    brief.exclusion_criteria.length ? `排除范围：${brief.exclusion_criteria.join('；')}` : '',
-    brief.evidence_gaps.length ? `已知证据缺口：${brief.evidence_gaps.join('；')}` : '',
-    `选题成熟度：${brief.readiness_score}/100（${brief.readiness_reason}）`,
-  ].filter(Boolean).join('\n')
-}
+const EDITABLE_LIST_FIELDS = [
+  'research_questions',
+  'section_hints',
+  'inclusion_criteria',
+  'exclusion_criteria',
+  'evidence_gaps',
+  'doc_keywords',
+] as const
 
-function ResearchBriefCard({
+type EditableListField = typeof EDITABLE_LIST_FIELDS[number]
+
+export function ResearchBriefCard({
   brief,
   starting,
+  saving,
   onAdjust,
+  onSave,
+  onConfirm,
   onStart,
 }: {
   brief: BrainstormConclusion
   starting: boolean
+  saving: boolean
   onAdjust: () => void
+  onSave: (brief: BrainstormConclusion) => Promise<void>
+  onConfirm: () => Promise<void>
   onStart: () => void
 }) {
   const ready = brief.readiness_score >= 70
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(brief)
+
+  useEffect(() => {
+    setDraft(brief)
+  }, [brief])
+
+  const updateList = (field: EditableListField, value: string) => {
+    setDraft((current) => ({
+      ...current,
+      [field]: value.split('\n').map((item) => item.trim()).filter(Boolean),
+    }))
+  }
+
+  const save = async () => {
+    await onSave(draft)
+    setEditing(false)
+  }
+
+  const statusLabel = {
+    draft: '待确认',
+    confirmed: '已确认',
+    handed_off: '已创建综述',
+  }[brief.status]
+
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-accent/30 bg-surface-1 shadow-xl shadow-black/10">
       <div className="flex items-start gap-3 border-b border-line bg-gradient-to-r from-accent/10 to-violet/10 px-4 py-3.5">
@@ -80,13 +115,25 @@ function ResearchBriefCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold text-ink-1">研究简报已生成</h2>
+            <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[0.65rem] text-ink-2">
+              v{brief.version} · {statusLabel}
+            </span>
             <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-medium ${
               ready ? 'bg-green/12 text-green' : 'bg-amber/12 text-amber'
             }`}>
               {ready ? '适合进入大纲阶段' : '建议继续收敛'}
             </span>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-ink-2">{brief.topic}</p>
+          {editing ? (
+            <input
+              value={draft.topic}
+              onChange={(event) => setDraft((current) => ({ ...current, topic: event.target.value }))}
+              className="mt-2 w-full rounded-lg border border-line bg-surface-0 px-2.5 py-2 text-xs text-ink-1 focus:border-accent/50 focus:outline-none"
+              aria-label="综述主题"
+            />
+          ) : (
+            <p className="mt-1 text-xs leading-relaxed text-ink-2">{brief.topic}</p>
+          )}
         </div>
         <div className="text-right">
           <div className="inline-flex items-center gap-1 text-sm font-semibold text-accent">
@@ -103,22 +150,58 @@ function ResearchBriefCard({
             style={{ width: `${brief.readiness_score}%` }}
           />
         </div>
-        <p className="text-[0.7rem] text-ink-3">{brief.readiness_reason}</p>
+        {editing ? (
+          <textarea
+            value={draft.summary}
+            onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))}
+            rows={3}
+            aria-label="研究简报摘要"
+            className="w-full rounded-lg border border-line bg-surface-0 px-2.5 py-2 text-xs leading-relaxed text-ink-1 focus:border-accent/50 focus:outline-none"
+          />
+        ) : (
+          <>
+            <p className="text-[0.7rem] text-ink-3">{brief.readiness_reason}</p>
+            <p className="text-xs leading-relaxed text-ink-2">{brief.summary}</p>
+          </>
+        )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-line bg-surface-0/55 p-3">
-            <div className="mb-1.5 text-[0.68rem] font-semibold text-ink-2">核心研究问题</div>
-            <ul className="space-y-1 text-xs leading-relaxed text-ink-2">
-              {brief.research_questions.map((item) => <li key={item}>· {item}</li>)}
-            </ul>
+        {editing ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([
+              ['research_questions', '核心研究问题（每行一条）'],
+              ['section_hints', '建议章节线索（每行一条）'],
+              ['inclusion_criteria', '纳入边界（每行一条）'],
+              ['exclusion_criteria', '排除范围（每行一条）'],
+              ['evidence_gaps', '证据缺口（每行一条）'],
+              ['doc_keywords', '检索关键词（每行一条）'],
+            ] as [EditableListField, string][]).map(([field, label]) => (
+              <label key={field} className="text-[0.68rem] font-semibold text-ink-2">
+                {label}
+                <textarea
+                  value={draft[field].join('\n')}
+                  onChange={(event) => updateList(field, event.target.value)}
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-line bg-surface-0 px-2.5 py-2 text-xs font-normal leading-relaxed text-ink-1 focus:border-accent/50 focus:outline-none"
+                />
+              </label>
+            ))}
           </div>
-          <div className="rounded-xl border border-line bg-surface-0/55 p-3">
-            <div className="mb-1.5 text-[0.68rem] font-semibold text-ink-2">建议章节线索</div>
-            <ul className="space-y-1 text-xs leading-relaxed text-ink-2">
-              {brief.section_hints.map((item) => <li key={item}>· {item}</li>)}
-            </ul>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-line bg-surface-0/55 p-3">
+              <div className="mb-1.5 text-[0.68rem] font-semibold text-ink-2">核心研究问题</div>
+              <ul className="space-y-1 text-xs leading-relaxed text-ink-2">
+                {brief.research_questions.map((item) => <li key={item}>· {item}</li>)}
+              </ul>
+            </div>
+            <div className="rounded-xl border border-line bg-surface-0/55 p-3">
+              <div className="mb-1.5 text-[0.68rem] font-semibold text-ink-2">建议章节线索</div>
+              <ul className="space-y-1 text-xs leading-relaxed text-ink-2">
+                {brief.section_hints.map((item) => <li key={item}>· {item}</li>)}
+              </ul>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 text-[0.68rem] text-ink-3">
           <span className="rounded-full bg-accent/10 px-2 py-1 text-accent">
@@ -140,22 +223,68 @@ function ResearchBriefCard({
         )}
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+          {editing ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(brief)
+                  setEditing(false)
+                }}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs text-ink-2 transition hover:bg-surface-2 disabled:opacity-50"
+              >
+                <X size={13} /> 取消
+              </button>
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition hover:bg-accent/25 disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                保存简报
+              </button>
+            </>
+          ) : brief.status !== 'handed_off' && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs text-ink-2 transition hover:bg-surface-2 hover:text-ink-1"
+            >
+              <PencilLine size={13} /> 编辑研究简报
+            </button>
+          )}
           <button
             type="button"
             onClick={onAdjust}
+            disabled={editing}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs text-ink-2 transition hover:bg-surface-2 hover:text-ink-1"
           >
             <PencilLine size={13} /> 调整生成配置
           </button>
-          <button
-            type="button"
-            onClick={onStart}
-            disabled={starting}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:opacity-50"
-          >
-            {starting ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
-            生成大纲并开始综述
-          </button>
+          {!editing && brief.status === 'draft' && (
+            <button
+              type="button"
+              onClick={() => void onConfirm()}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              确认研究简报
+            </button>
+          )}
+          {!editing && brief.status !== 'draft' && (
+            <button
+              type="button"
+              onClick={onStart}
+              disabled={starting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:opacity-50"
+            >
+              {starting ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+              {brief.status === 'handed_off' ? '打开综述任务' : '生成大纲并开始综述'}
+            </button>
+          )}
         </div>
       </div>
     </section>
@@ -169,9 +298,52 @@ export function BrainstormPage() {
   const [busy, setBusy] = useState(false)
   const [concluding, setConcluding] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [savingBrief, setSavingBrief] = useState(false)
   const [handoff, setHandoff] = useState<BrainstormConclusion | null>(null)
+  const [briefError, setBriefError] = useState('')
   const convIdRef = useRef<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const stored = window.sessionStorage.getItem('survey-agent-brainstorm-conv')
+    if (!stored) return
+    convIdRef.current = stored
+    const restore = async () => {
+      try {
+        const conversationResponse = await fetch(`/api/conversations/${stored}`)
+        if (!conversationResponse.ok) throw new Error('conversation unavailable')
+        const conversation = await conversationResponse.json() as {
+          messages?: Array<{
+            role: 'user' | 'assistant'
+            content: string
+            trace?: TraceItem[]
+            latency_ms?: number
+          }>
+        }
+        setMessages((conversation.messages ?? []).map((message) => {
+          const scopeEvent = [...(message.trace ?? [])].reverse().find((item) => {
+            const detail = item.data?.detail as ScopeBrief | undefined
+            return item.type === 'tool_result' && Boolean(detail?.related_documents)
+          })
+          return {
+            role: message.role,
+            content: message.content,
+            trace: message.trace,
+            latencyMs: message.latency_ms,
+            scope: scopeEvent?.data?.detail as ScopeBrief | undefined,
+          }
+        }))
+        const briefResponse = await fetch(`/api/brainstorm/${stored}/briefs/latest`)
+        if (briefResponse.ok) {
+          setHandoff(await briefResponse.json() as BrainstormConclusion)
+        }
+      } catch {
+        window.sessionStorage.removeItem('survey-agent-brainstorm-conv')
+        convIdRef.current = null
+      }
+    }
+    void restore()
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -202,7 +374,10 @@ export function BrainstormPage() {
         '/api/brainstorm',
         { message, conv_id: convIdRef.current },
         {
-          onMeta: (d) => { convIdRef.current = d.conv_id },
+          onMeta: (d) => {
+            convIdRef.current = d.conv_id
+            window.sessionStorage.setItem('survey-agent-brainstorm-conv', d.conv_id)
+          },
           onThinking: (d) => patchLast((m) => ({
             trace: [...(m.trace ?? []), {
               type: 'thinking',
@@ -254,6 +429,7 @@ export function BrainstormPage() {
       if (!r.ok) throw new Error(`conclude failed: ${r.status}`)
       const c: BrainstormConclusion = await r.json()
       setHandoff(c)
+      setBriefError('')
     } catch {
       setHandoff(null)
     } finally {
@@ -261,26 +437,84 @@ export function BrainstormPage() {
     }
   }
 
+  const saveBrief = async (brief: BrainstormConclusion) => {
+    if (savingBrief) return
+    setSavingBrief(true)
+    setBriefError('')
+    try {
+      const r = await fetch(`/api/research-briefs/${brief.brief_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: brief.topic,
+          summary: brief.summary,
+          section_hints: brief.section_hints,
+          doc_keywords: brief.doc_keywords,
+          research_questions: brief.research_questions,
+          inclusion_criteria: brief.inclusion_criteria,
+          exclusion_criteria: brief.exclusion_criteria,
+          evidence_gaps: brief.evidence_gaps,
+        }),
+      })
+      if (!r.ok) throw new Error(`save brief failed: ${r.status}`)
+      setHandoff(await r.json() as BrainstormConclusion)
+    } catch (error) {
+      setBriefError(error instanceof Error ? error.message : '研究简报保存失败')
+      throw error
+    } finally {
+      setSavingBrief(false)
+    }
+  }
+
+  const confirmBrief = async () => {
+    if (!handoff || savingBrief) return
+    setSavingBrief(true)
+    setBriefError('')
+    try {
+      const r = await fetch(`/api/research-briefs/${handoff.brief_id}/confirm`, {
+        method: 'POST',
+      })
+      if (!r.ok) {
+        const payload = await r.json().catch(() => null) as {
+          detail?: { errors?: string[] } | string
+        } | null
+        const errors = typeof payload?.detail === 'object'
+          ? payload.detail.errors?.join('；')
+          : payload?.detail
+        throw new Error(errors || `confirm brief failed: ${r.status}`)
+      }
+      setHandoff(await r.json() as BrainstormConclusion)
+    } catch (error) {
+      setBriefError(error instanceof Error ? error.message : '研究简报确认失败')
+    } finally {
+      setSavingBrief(false)
+    }
+  }
+
   const startSurvey = async () => {
     if (!handoff || starting) return
+    if (handoff.task_id) {
+      navigate(`/surveys/${handoff.task_id}`)
+      return
+    }
     setStarting(true)
+    setBriefError('')
     try {
-      const r = await fetch('/api/tasks', {
+      const r = await fetch(`/api/research-briefs/${handoff.brief_id}/handoff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic: handoff.topic,
           auto_approve: false,
           section_length: 'medium',
           doc_scope: handoff.doc_scope,
-          context: handoffContext(handoff),
         }),
       })
       if (!r.ok) throw new Error(`create survey failed: ${r.status}`)
-      const task = await r.json() as { task_id: string }
+      const task = await r.json() as BrainstormConclusion
+      setHandoff(task)
       navigate(`/surveys/${task.task_id}`)
-    } catch {
-      // 保留研究简报，用户可以重试或进入配置页手动调整。
+    } catch (error) {
+      setBriefError(error instanceof Error ? error.message : '综述任务创建失败')
     } finally {
       setStarting(false)
     }
@@ -367,12 +601,22 @@ export function BrainstormPage() {
             )}
           </div>
           {handoff && (
-            <ResearchBriefCard
-              brief={handoff}
-              starting={starting}
-              onAdjust={() => navigate('/surveys', { state: { prefill: handoff } })}
-              onStart={() => void startSurvey()}
-            />
+            <>
+              <ResearchBriefCard
+                brief={handoff}
+                starting={starting}
+                saving={savingBrief}
+                onAdjust={() => navigate('/surveys', { state: { prefill: handoff } })}
+                onSave={saveBrief}
+                onConfirm={confirmBrief}
+                onStart={() => void startSurvey()}
+              />
+              {briefError && (
+                <p className="mt-2 rounded-lg border border-red/25 bg-red/5 px-3 py-2 text-xs text-red">
+                  {briefError}
+                </p>
+              )}
+            </>
           )}
           <div ref={bottomRef} />
         </div>

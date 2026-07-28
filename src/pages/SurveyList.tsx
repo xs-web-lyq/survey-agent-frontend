@@ -35,6 +35,9 @@ export function SurveyList() {
   const [length, setLength] = useState('medium')
   const [docScope, setDocScope] = useState<string[]>([])
   const [context, setContext] = useState('')
+  const [researchBriefId, setResearchBriefId] = useState('')
+  const [researchBriefStatus, setResearchBriefStatus] = useState('')
+  const [researchBriefTaskId, setResearchBriefTaskId] = useState('')
   const [creating, setCreating] = useState(false)
 
   // 头脑风暴 conclude 跳转预填:topic + 讨论结论 + 按关键词预选文献
@@ -48,12 +51,18 @@ export function SurveyList() {
         exclusion_criteria?: string[]
         evidence_gaps?: string[]
         readiness_score?: number
-        readiness_reason?: string
-        doc_scope?: string[]
-      }
+         readiness_reason?: string
+         doc_scope?: string[]
+         brief_id?: string
+         status?: 'draft' | 'confirmed' | 'handed_off'
+         task_id?: string
+       }
     } | null)?.prefill
     if (!prefill) return
     setTopic(prefill.topic)
+    setResearchBriefId(prefill.brief_id ?? '')
+    setResearchBriefStatus(prefill.status ?? '')
+    setResearchBriefTaskId(prefill.task_id ?? '')
     setContext([
       prefill.summary,
       `应覆盖方向：${prefill.section_hints.join('；')}`,
@@ -103,6 +112,40 @@ export function SurveyList() {
     if (!topic.trim() || creating) return
     setCreating(true)
     try {
+      if (researchBriefId) {
+        if (researchBriefTaskId) {
+          navigate(`/surveys/${researchBriefTaskId}`)
+          return
+        }
+        if (researchBriefStatus !== 'handed_off') {
+          const update = await fetch(`/api/research-briefs/${researchBriefId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: topic.trim() }),
+          })
+          if (!update.ok) throw new Error(`update research brief: ${update.status}`)
+        }
+        if (researchBriefStatus !== 'confirmed') {
+          const confirm = await fetch(`/api/research-briefs/${researchBriefId}/confirm`, {
+            method: 'POST',
+          })
+          if (!confirm.ok) throw new Error(`confirm research brief: ${confirm.status}`)
+          setResearchBriefStatus('confirmed')
+        }
+        const handoff = await fetch(`/api/research-briefs/${researchBriefId}/handoff`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            auto_approve: autoApprove,
+            section_length: length,
+            doc_scope: docScope,
+          }),
+        })
+        if (!handoff.ok) throw new Error(`handoff research brief: ${handoff.status}`)
+        const task = await handoff.json() as { task_id: string }
+        navigate(`/surveys/${task.task_id}`)
+        return
+      }
       const r = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,6 +240,11 @@ export function SurveyList() {
             <div className="mb-0.5 flex items-center gap-1 text-[0.68rem] font-medium text-amber">
               <Lightbulb size={11} />
               选题讨论结论(将注入大纲生成)
+              {researchBriefId && (
+                <span className="ml-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[0.6rem] text-accent">
+                  已关联 Research Brief
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setContext('')}
