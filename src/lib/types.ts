@@ -20,6 +20,7 @@ export interface Citation {
 export interface TraceItem {
   type: 'thinking' | 'tool_call' | 'tool_result' | 'route_info' | 'deep_round'
     | 'memory_loaded' | 'query_rewritten' | 'memory_updated' | 'memory_compacted'
+    | 'task_status'
   data: Record<string, unknown>
   ts: number
 }

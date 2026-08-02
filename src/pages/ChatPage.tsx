@@ -13,6 +13,7 @@ import { DragHandle, useDragWidth } from '../lib/useDragWidth'
 import { MemoryPanel } from '../components/MemoryPanel'
 import { ConversationSidebar } from '../components/ConversationSidebar'
 import { RecycleBinPanel } from '../components/RecycleBinPanel'
+import { traceFromRunEvents } from '../lib/runEvents'
 
 let tempIdCounter = 0
 
@@ -96,7 +97,8 @@ export function ChatPage() {
       setMessages([])
       return
     }
-    api.conversation(convId).then((conv) => {
+    let cancelled = false
+    api.conversation(convId).then(async (conv) => {
       const msgs = (conv.messages as Record<string, unknown>[]).map((m) => ({
         id: String(m.id),
         role: m.role as 'user' | 'assistant',
@@ -111,8 +113,24 @@ export function ChatPage() {
         run_id: String(m.run_id ?? ''),
         feedback: m.feedback as ChatMessageData['feedback'],
       }))
-      setMessages(msgs)
-    }).catch(() => setMessages([]))
+      const hydrated = await Promise.all(msgs.map(async (message) => {
+        if (message.role !== 'assistant' || !message.run_id) return message
+        try {
+          const page = await api.runEvents(message.run_id)
+          const replayedTrace = traceFromRunEvents(page.events)
+          return replayedTrace.length > 0
+            ? { ...message, trace: replayedTrace }
+            : message
+        } catch {
+          // Old deployments and pre-event-store runs continue using snapshots.
+          return message
+        }
+      }))
+      if (!cancelled) setMessages(hydrated)
+    }).catch(() => {
+      if (!cancelled) setMessages([])
+    })
+    return () => { cancelled = true }
   }, [convId])
 
   useEffect(() => {
