@@ -8,6 +8,7 @@ import { SurveyDetail } from './pages/SurveyDetail'
 import { FeedbackPage } from './pages/FeedbackPage'
 import { BrainstormPage } from './pages/BrainstormPage'
 import { useTheme } from './lib/useTheme'
+import { DesktopStatusBar } from './components/DesktopStatusBar'
 
 const NAV = [
   { to: '/chat', icon: MessagesSquare, label: '对话' },
@@ -20,9 +21,10 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="flex h-full">
-        {/* 全局侧边导航 */}
-        <nav className="app-nav flex w-14 shrink-0 flex-col items-center gap-1 border-r border-line/70 bg-surface-1/90 py-4 backdrop-blur-xl">
+      <div className="flex h-full flex-col">
+        <div className="flex min-h-0 flex-1">
+          {/* 全局侧边导航 */}
+          <nav className="app-nav flex w-14 shrink-0 flex-col items-center gap-1 border-r border-line/70 bg-surface-1/90 py-4 backdrop-blur-xl">
           <div className="brand-gem mb-4 flex h-8 w-8 items-center justify-center rounded-xl font-bold text-white shadow-md">
             R
           </div>
@@ -52,19 +54,21 @@ export default function App() {
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-        </nav>
+          </nav>
 
-        <main className="min-w-0 flex-1">
-          <Routes>
-            <Route path="/" element={<Navigate to="/chat" replace />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/chat/:convId" element={<ChatPage />} />
-            <Route path="/surveys" element={<SurveyList />} />
-            <Route path="/surveys/brainstorm" element={<BrainstormPage />} />
-            <Route path="/surveys/:taskId" element={<SurveyDetail />} />
-            <Route path="/data" element={<FeedbackPage />} />
-          </Routes>
-        </main>
+          <main className="min-w-0 flex-1">
+            <Routes>
+              <Route path="/" element={<Navigate to="/chat" replace />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/chat/:convId" element={<ChatPage />} />
+              <Route path="/surveys" element={<SurveyList />} />
+              <Route path="/surveys/brainstorm" element={<BrainstormPage />} />
+              <Route path="/surveys/:taskId" element={<SurveyDetail />} />
+              <Route path="/data" element={<FeedbackPage />} />
+            </Routes>
+          </main>
+        </div>
+        <DesktopStatusBar />
       </div>
     </BrowserRouter>
   )
