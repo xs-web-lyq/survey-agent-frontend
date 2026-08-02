@@ -29,11 +29,23 @@ describe('DesktopStatusBar', () => {
       })),
       onConnectionChanged: vi.fn(() => unsubscribe),
       retryConnection: vi.fn(async () => undefined),
+      getAgentState: vi.fn(async () => ({
+        status: 'ready',
+        restartCount: 0,
+        pid: 123,
+      })),
+      onAgentStateChanged: vi.fn(() => vi.fn()),
+      listAgentTools: vi.fn(async () => []),
+      invokeAgentTool: vi.fn(async () => ({ invocationId: 'inv-1', ok: true, durationMs: 1 })),
+      getAuditEvents: vi.fn(async () => []),
+      onPermissionRequested: vi.fn(() => vi.fn()),
+      resolvePermission: vi.fn(async () => true),
     }
     window.surveyDesktop = bridge
 
     const { unmount } = render(<DesktopStatusBar />)
-    await waitFor(() => expect(screen.getByText('Agent Core 在线 · 12 ms')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('检索服务在线 · 12 ms')).toBeInTheDocument())
+    expect(screen.getByText('Agent Core 就绪')).toBeInTheDocument()
     expect(screen.getByText('Desktop v0.1.0')).toBeInTheDocument()
     expect(screen.getByText('http://127.0.0.1:8000')).toBeInTheDocument()
     unmount()

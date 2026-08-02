@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Cloud, CloudOff, LoaderCircle, Monitor } from 'lucide-react'
+import { Bot, Cloud, CloudOff, LoaderCircle, Monitor } from 'lucide-react'
 import {
   getDesktopBridge,
+  type AgentCoreState,
   type DesktopConnectionState,
   type DesktopRuntimeInfo,
 } from '../lib/desktop'
@@ -13,6 +14,10 @@ export function DesktopStatusBar() {
     status: 'connecting',
     checkedAt: Date.now(),
   })
+  const [agent, setAgent] = useState<AgentCoreState>({
+    status: 'starting',
+    restartCount: 0,
+  })
 
   useEffect(() => {
     if (!bridge) return
@@ -20,17 +25,23 @@ export function DesktopStatusBar() {
     void Promise.all([
       bridge.getRuntimeInfo(),
       bridge.getConnectionState(),
-    ]).then(([nextRuntime, nextConnection]) => {
+      bridge.getAgentState(),
+    ]).then(([nextRuntime, nextConnection, nextAgent]) => {
       if (!active) return
       setRuntime(nextRuntime)
       setConnection(nextConnection)
+      setAgent(nextAgent)
     })
     const unsubscribe = bridge.onConnectionChanged((next) => {
       if (active) setConnection(next)
     })
+    const unsubscribeAgent = bridge.onAgentStateChanged((next) => {
+      if (active) setAgent(next)
+    })
     return () => {
       active = false
       unsubscribe()
+      unsubscribeAgent()
     }
   }, [bridge])
 
@@ -38,20 +49,27 @@ export function DesktopStatusBar() {
 
   const status = {
     connecting: {
-      label: '正在连接 Agent Core',
+      label: '正在连接检索服务',
       icon: <LoaderCircle size={11} className="animate-spin text-accent" />,
     },
     online: {
       label: connection.latencyMs != null
-        ? `Agent Core 在线 · ${connection.latencyMs} ms`
-        : 'Agent Core 在线',
+        ? `检索服务在线 · ${connection.latencyMs} ms`
+        : '检索服务在线',
       icon: <Cloud size={11} className="text-green" />,
     },
     offline: {
-      label: 'Agent Core 离线',
+      label: '检索服务离线',
       icon: <CloudOff size={11} className="text-red" />,
     },
   }[connection.status]
+
+  const agentLabel = {
+    starting: 'Agent Core 启动中',
+    ready: 'Agent Core 就绪',
+    stopped: 'Agent Core 已停止',
+    error: `Agent Core 异常${agent.restartCount ? ` · 重启 ${agent.restartCount}` : ''}`,
+  }[agent.status]
 
   return (
     <footer
@@ -61,6 +79,13 @@ export function DesktopStatusBar() {
       <span className="inline-flex items-center gap-1.5">
         <Monitor size={11} className="text-violet" />
         Desktop {runtime ? `v${runtime.appVersion}` : ''}
+      </span>
+      <span className="h-3 w-px bg-line" />
+      <span className="inline-flex items-center gap-1.5" role="status">
+        {agent.status === 'starting'
+          ? <LoaderCircle size={11} className="animate-spin text-violet" />
+          : <Bot size={11} className={agent.status === 'ready' ? 'text-green' : 'text-red'} />}
+        {agentLabel}
       </span>
       <span className="h-3 w-px bg-line" />
       <span className="inline-flex items-center gap-1.5" role="status">

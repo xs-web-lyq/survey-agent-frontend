@@ -9,6 +9,7 @@ import { FeedbackPage } from './pages/FeedbackPage'
 import { BrainstormPage } from './pages/BrainstormPage'
 import { useTheme } from './lib/useTheme'
 import { DesktopStatusBar } from './components/DesktopStatusBar'
+import { DesktopPermissionPrompt } from './components/DesktopPermissionPrompt'
 
 const NAV = [
   { to: '/chat', icon: MessagesSquare, label: '对话' },
@@ -69,6 +70,7 @@ export default function App() {
           </main>
         </div>
         <DesktopStatusBar />
+        <DesktopPermissionPrompt />
       </div>
     </BrowserRouter>
   )
