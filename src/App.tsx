@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
-import { BookOpenText, Database, MessagesSquare, Moon, Sun } from 'lucide-react'
+import { BookOpenText, Database, MessagesSquare, Moon, Sun, Wrench } from 'lucide-react'
 import { ChatPage } from './pages/ChatPage'
 import { SurveyList } from './pages/SurveyList'
 import { SurveyDetail } from './pages/SurveyDetail'
@@ -12,11 +12,14 @@ import { useTheme } from './lib/useTheme'
 import { DesktopStatusBar } from './components/DesktopStatusBar'
 import { DesktopPermissionPrompt } from './components/DesktopPermissionPrompt'
 import { DesktopToolCenter } from './components/DesktopToolCenter'
+import { AutomationHub } from './pages/AutomationHub'
+import { BilletModelerPage } from './pages/BilletModelerPage'
 
 const NAV = [
   { to: '/chat', icon: MessagesSquare, label: '对话' },
   { to: '/surveys', icon: BookOpenText, label: '综述' },
   { to: '/data', icon: Database, label: '数据' },
+  { to: '/automations', icon: Wrench, label: '自动化' },
 ]
 
 export default function App() {
@@ -69,6 +72,8 @@ export default function App() {
               <Route path="/surveys/brainstorm" element={<BrainstormPage />} />
               <Route path="/surveys/:taskId" element={<SurveyDetail />} />
               <Route path="/data" element={<FeedbackPage />} />
+              <Route path="/automations" element={<AutomationHub />} />
+              <Route path="/automations/billet-modeler" element={<BilletModelerPage />} />
             </Routes>
           </main>
         </div>
