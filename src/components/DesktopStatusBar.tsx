@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot, Cloud, CloudOff, LoaderCircle, Monitor } from 'lucide-react'
+import { Bot, Cloud, CloudOff, LoaderCircle, Monitor, Wrench } from 'lucide-react'
 import {
   getDesktopBridge,
   type AgentCoreState,
@@ -7,7 +7,7 @@ import {
   type DesktopRuntimeInfo,
 } from '../lib/desktop'
 
-export function DesktopStatusBar() {
+export function DesktopStatusBar({ onOpenTools }: { onOpenTools?: () => void }) {
   const bridge = getDesktopBridge()
   const [runtime, setRuntime] = useState<DesktopRuntimeInfo | null>(null)
   const [connection, setConnection] = useState<DesktopConnectionState>({
@@ -92,7 +92,15 @@ export function DesktopStatusBar() {
         {status.icon}
         {status.label}
       </span>
-      {runtime && <span className="ml-auto font-mono">{runtime.backendOrigin}</span>}
+      <button
+        type="button"
+        onClick={onOpenTools}
+        className="ml-auto inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-ink-3 hover:bg-surface-2 hover:text-ink-1"
+      >
+        <Wrench size={11} />
+        工具中心
+      </button>
+      {runtime && <span className="font-mono">{runtime.backendOrigin}</span>}
     </footer>
   )
 }

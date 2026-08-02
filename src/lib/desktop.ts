@@ -46,6 +46,44 @@ export interface AgentToolResult {
   errorCode?: string
 }
 
+export interface McpServerConfig {
+  id: string
+  name: string
+  transport: 'stdio'
+  command: string
+  args: string[]
+  cwd?: string
+  enabled: boolean
+  inheritEnv: string[]
+}
+
+export interface McpServerStatus {
+  id: string
+  status: 'disabled' | 'connecting' | 'online' | 'error'
+  toolCount: number
+  lastErrorCode?: string
+}
+
+export interface McpServerSummary extends McpServerConfig {
+  runtime: McpServerStatus
+}
+
+export interface McpServerConfigInput {
+  id?: string
+  name: string
+  command: string
+  args?: string[]
+  cwd?: string
+  enabled?: boolean
+  inheritEnv?: string[]
+}
+
+export interface DesktopOperationResult<T = undefined> {
+  ok: boolean
+  value?: T
+  errorCode?: string
+}
+
 export type PermissionDecision = 'allow_once' | 'allow_session' | 'deny'
 
 export interface AgentPermissionRequest {
@@ -58,7 +96,7 @@ export interface AgentPermissionRequest {
 export interface AgentAuditEvent {
   id: string
   timestamp: number
-  eventType: 'core.started' | 'core.stopped' | 'permission.requested' | 'permission.resolved' | 'tool.completed'
+  eventType: 'core.started' | 'core.stopped' | 'permission.requested' | 'permission.resolved' | 'tool.completed' | 'mcp.configured' | 'mcp.removed' | 'mcp.connected' | 'mcp.error'
   toolId?: string
   decision?: PermissionDecision
   outcome?: 'success' | 'failure'
@@ -78,6 +116,10 @@ export interface SurveyDesktopBridge {
   getAuditEvents(limit?: number): Promise<AgentAuditEvent[]>
   onPermissionRequested(listener: (request: AgentPermissionRequest) => void): () => void
   resolvePermission(requestId: string, decision: PermissionDecision): Promise<boolean>
+  listMcpServers(): Promise<McpServerSummary[]>
+  saveMcpServer(config: McpServerConfigInput): Promise<DesktopOperationResult<McpServerConfig>>
+  removeMcpServer(serverId: string): Promise<DesktopOperationResult>
+  onMcpStateChanged(listener: (states: McpServerStatus[]) => void): () => void
 }
 
 declare global {

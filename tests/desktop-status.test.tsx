@@ -40,6 +40,10 @@ describe('DesktopStatusBar', () => {
       getAuditEvents: vi.fn(async () => []),
       onPermissionRequested: vi.fn(() => vi.fn()),
       resolvePermission: vi.fn(async () => true),
+      listMcpServers: vi.fn(async () => []),
+      saveMcpServer: vi.fn(async () => ({ ok: true })),
+      removeMcpServer: vi.fn(async () => ({ ok: true })),
+      onMcpStateChanged: vi.fn(() => vi.fn()),
     }
     window.surveyDesktop = bridge
 

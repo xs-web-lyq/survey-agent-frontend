@@ -1,5 +1,6 @@
 /** 应用外壳:左侧全局导航(对话 / 综述 / 数据)+ 主题切换 */
 
+import { useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { BookOpenText, Database, MessagesSquare, Moon, Sun } from 'lucide-react'
 import { ChatPage } from './pages/ChatPage'
@@ -10,6 +11,7 @@ import { BrainstormPage } from './pages/BrainstormPage'
 import { useTheme } from './lib/useTheme'
 import { DesktopStatusBar } from './components/DesktopStatusBar'
 import { DesktopPermissionPrompt } from './components/DesktopPermissionPrompt'
+import { DesktopToolCenter } from './components/DesktopToolCenter'
 
 const NAV = [
   { to: '/chat', icon: MessagesSquare, label: '对话' },
@@ -19,6 +21,7 @@ const NAV = [
 
 export default function App() {
   const { theme, toggle } = useTheme()
+  const [toolsOpen, setToolsOpen] = useState(false)
 
   return (
     <BrowserRouter>
@@ -69,7 +72,8 @@ export default function App() {
             </Routes>
           </main>
         </div>
-        <DesktopStatusBar />
+        <DesktopStatusBar onOpenTools={() => setToolsOpen(true)} />
+        <DesktopToolCenter open={toolsOpen} onClose={() => setToolsOpen(false)} />
         <DesktopPermissionPrompt />
       </div>
     </BrowserRouter>
