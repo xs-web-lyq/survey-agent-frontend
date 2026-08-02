@@ -1,6 +1,6 @@
 /** REST API 封装 */
 
-import type { ConversationSummary, MemoryDebug, Meta } from './types'
+import type { ConversationSummary, MemoryDebug, Meta, RunEventPage } from './types'
 
 async function getJSON<T>(url: string): Promise<T> {
   const r = await fetch(url)
@@ -63,6 +63,8 @@ export const api = {
   },
   conversationMemory: (id: string) =>
     getJSON<MemoryDebug>(`/api/conversations/${id}/memory`),
+  runEvents: (id: string, afterSeq = 0) =>
+    getJSON<RunEventPage>(`/api/runs/${id}/events?after_seq=${afterSeq}`),
   forkConversation: async (id: string, through_message_id?: string) => {
     const r = await fetch(`/api/conversations/${id}/fork`, {
       method: 'POST',

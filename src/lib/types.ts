@@ -24,6 +24,21 @@ export interface TraceItem {
   ts: number
 }
 
+export interface RunEvent {
+  id: string
+  run_id: string
+  seq: number
+  event_type: string
+  stage: string
+  payload: Record<string, unknown>
+  created_at: number
+}
+
+export interface RunEventPage {
+  run_id: string
+  events: RunEvent[]
+}
+
 export interface FeedbackData {
   rating: number
   score?: number | null
